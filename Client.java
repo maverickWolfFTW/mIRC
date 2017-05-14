@@ -4,228 +4,245 @@ import java.io.*;
 
 import java.util.*;
 
+public class Client {
 
-public class Client  {
+	private ObjectInputStream sInput;
+	private ObjectOutputStream sOutput;
+	private Socket socket;
+	private ClientGUI clientGui;
+	private String server, username;
+	private int port;
+	private String room;
 
-    private ObjectInputStream sInput;
-    private ObjectOutputStream sOutput;
-    private Socket socket;
-    private ClientGUI clientGui;
-    private String server, username;
-    private int port;
+	Client(String server, int port, String username, String room) {
+		this(server, port, username, room, null);
+	}
 
-    Client(String server, int port, String username) {
-        this(server, port, username, null);
-    }
+	Client(String server, int port, String username, String room, ClientGUI clientGui) {
 
-    Client(String server, int port, String username, ClientGUI clientGui) {
+		this.server = server;
+		this.port = port;
+		this.username = username;
+		this.clientGui = clientGui;
+		this.room = room;
+	}
 
-        this.server = server;
-        this.port = port;
-        this.username = username;
-        this.clientGui = clientGui;
-    }
+	public boolean start() {
 
-    public boolean start() {
+		try {
+			socket = new Socket(server, port);
+		}
 
-        try {
-            socket = new Socket(server, port);
-        }
+		catch (Exception ec) {
+			display("Eroare la conexiunea cu serverul: " + ec);
 
-        catch(Exception ec) {
-            display("Eroare la conexiunea cu serverul: " + ec);
-            
-            return false;
-        }
+			return false;
+		}
 
-        String mesaj = "Conexiune acceptata " + socket.getInetAddress() + ":" + socket.getPort();
-        display(mesaj);
+		String mesaj = "Conexiune acceptata " + socket.getInetAddress() + ":" + socket.getPort();
+		display(mesaj);
 
-        try {
-            sInput  = new ObjectInputStream(socket.getInputStream());
-            sOutput = new ObjectOutputStream(socket.getOutputStream());
-        }
+		try {
+			sInput = new ObjectInputStream(socket.getInputStream());
+			sOutput = new ObjectOutputStream(socket.getOutputStream());
+		}
 
-        catch (IOException eIO) {
-            display("Exceptie la creare: " + eIO);
+		catch (IOException eIO) {
+			display("Exceptie la creare: " + eIO);
 
-            return false;
-        }
+			return false;
+		}
 
+		new ListenFromServer().start();
 
-        new ListenFromServer().start();
+		sendType(Chat.CREATE);
+		// try {
+		// // sOutput.writeObject(new Chat(Chat.CREATE, room, username, ""));
+		// // sOutput.writeObject(username);
+		// }
+		//
+		// catch (IOException eIO) {
+		// display("Exceptie la login : " + eIO);
+		// disconnect();
+		//
+		// return false;
+		// }
 
-        try	{
-            sOutput.writeObject(username);
-        }
+		return true;
+	}
 
-        catch (IOException eIO) {
-            display("Exceptie la login : " + eIO);
-            disconnect();
+	private void display(String mesaj) {
 
-            return false;
-        }
+		if (clientGui == null)
+			System.out.println(mesaj);
 
-        return true;
-    }
+		else
+			clientGui.append(mesaj + "\n");
+	}
 
+	void sendType(int ID) {
+		sendToServer(ID, "");
+	}
 
-    private void display(String mesaj) {
-    	
-        if(clientGui == null)
-            System.out.println(mesaj);
+	void sendMessage(String mesaj) {
+		sendToServer(Chat.MESSAGE, mesaj);
+	}
 
-        else
-            clientGui.append(mesaj + "\n");
-    }
+	void sendToServer(int ID, String mesaj) {
+		try {
+			sOutput.writeObject(new Chat(ID, room, username, mesaj));
+		} catch (IOException e) {
+			display("Exceptie trimitere mesaj catre server: " + e);
+		}
+	}
 
-    void sendMessage(Chat mesaj) {
-    	
-        try {
+	private void disconnect() {
 
-            sOutput.writeObject(mesaj);
-        }
+		try {
 
-        catch(IOException e) {
+			if (sInput != null)
+				sInput.close();
+		}
 
-            display("Exceptie trimitere mesaj catre server: " + e);
-        }
-    }
+		catch (Exception e) {
+		}
 
-    private void disconnect() {
+		try {
 
-        try {
-        	
-            if(sInput != null) 
-            	sInput.close();
-        }
+			if (sOutput != null)
+				sOutput.close();
+		}
 
-        catch(Exception e) {}
+		catch (Exception e) {
+		}
 
-        try {
+		try {
 
-            if(sOutput != null) sOutput.close();
-        }
+			if (socket != null)
+				socket.close();
+		}
 
-        catch(Exception e) {}
+		catch (Exception e) {
+		}
 
-        try{
-        	
-            if(socket != null) 
-            	socket.close();
-        }
+		if (clientGui != null)
+			clientGui.connectionFailed();
+	}
 
-        catch(Exception e) {}
+	public static void main(String[] args) {
 
-        if(clientGui != null)
-            clientGui.connectionFailed();
-    }
+		int portNumber = 4200;
+		String serverAddress = "localhost";
+		String userName = "Anonim";
 
-    public static void main(String[] args) {
+		switch (args.length) {
 
-        int portNumber = 1500;
-        String serverAddress = "localhost";
-        String userName = "Anonim";
+		case 3:
+			serverAddress = args[2];
 
-        switch(args.length) {
+		case 2:
 
-            case 3:
-                serverAddress = args[2];
-                
-            case 2:
+			try {
+				portNumber = Integer.parseInt(args[1]);
+			}
 
-                try {
-                    portNumber = Integer.parseInt(args[1]);
-                }
+			catch (Exception e) {
 
-                catch(Exception e) {
+				System.out.println("Port invalid.");
 
-                    System.out.println("Port invalid.");
+				return;
+			}
 
-                    return;
-                }
+		case 1:
+			userName = args[0];
 
-            case 1:
-                userName = args[0];
-                
-            case 0:
-                break;
-                
-            default:
+		case 0:
+			break;
 
-            return;
-        }
+		default:
 
-        Client client = new Client(serverAddress, portNumber, userName);
+			return;
+		}
 
-        if(!client.start())
-            return;
+		Client client = new Client(serverAddress, portNumber, userName, "Room 1");
 
-        @SuppressWarnings("resource")
+		if (!client.start())
+			return;
+
+		@SuppressWarnings("resource")
 		Scanner scan = new Scanner(System.in);
 
-        while(true) {
+		while (true) {
 
-            System.out.print(">>> ");
-            String mesaj = scan.nextLine();
-            
-            if(mesaj.equalsIgnoreCase("LOGOUT")) {
-            	
-                client.sendMessage(new Chat(Chat.LOGOUT, ""));
+			System.out.print(">>> ");
+			String mesaj = scan.nextLine();
 
-                break;
-            }
+			if (mesaj.equalsIgnoreCase("LOGOUT")) {
+				client.sendType(Chat.LOGOUT);
+				break;
+			} else if (mesaj.equalsIgnoreCase("WHOISIN")) {
+				client.sendType(Chat.WHOISIN);
+			} else {
+				client.sendMessage(mesaj);
+			}
+		}
 
-            else if(mesaj.equalsIgnoreCase("WHOISIN")) {
+		client.disconnect();
+	}
 
-                client.sendMessage(new Chat(Chat.WHOISIN, ""));              
-            }
+	public String getRoom() {
+		return room;
+	}
 
-            else { 
+	public void setRoom(String room) {
+		this.room = room;
+	}
 
-                client.sendMessage(new Chat(Chat.MESSAGE, mesaj));
-            }
-        }
+	public String getUser() {
+		return username;
+	}
 
-        client.disconnect();   
-    }
+	class ListenFromServer extends Thread {
 
-    class ListenFromServer extends Thread {
+		public void run() {
 
-        public void run() {
+			while (true) {
 
-            while(true) {
+				try {
+					Chat chat = (Chat) sInput.readObject();
+					String mesaj = chat.getMesaj();
+					String room = chat.getRoom();
+					String user = chat.getUser();
 
-                try {
-                    String mesaj = (String) sInput.readObject();
+					// String mesaj = (String) sInput.readObject();
+					if (clientGui == null) {
 
-                    if(clientGui == null) {
+						System.out.println(mesaj);
+						System.out.print(">>> ");
+					}
 
-                        System.out.println(mesaj);
-                        System.out.print(">>> ");
-                    }
+					else {
 
-                    else {
+						clientGui.append(mesaj + "");
+					}
+				}
 
-                        clientGui.append(mesaj);
-                    }
-                }
+				catch (IOException e) {
 
-                catch(IOException e) {
+					e.printStackTrace();
+					display("Serverul a inchis conexiunea: " + e);
 
-                    display("Serverul a inchis conexiunea: " + e);
+					if (clientGui != null)
+						clientGui.connectionFailed();
 
-                    if(clientGui != null)
-                        clientGui.connectionFailed();
+					break;
+				}
 
-                    break;
-                }
+				catch (ClassNotFoundException e2) {
 
-                catch(ClassNotFoundException e2) {
+				}
 
-                }
-                
-            }
-       }
-    }
+			}
+		}
+	}
 }
